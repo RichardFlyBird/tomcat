@@ -16,11 +16,12 @@
  */
 package org.apache.jasper.compiler;
 
+import org.apache.jasper.runtime.ExceptionUtils;
+
+import java.io.UnsupportedEncodingException;
 import java.text.MessageFormat;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
-
-import org.apache.jasper.runtime.ExceptionUtils;
 
 /**
  * Class responsible for converting error codes to corresponding localized
@@ -56,9 +57,12 @@ public class Localizer {
         try {
             if (bundle != null) {
                 errMsg = bundle.getString(errCode);
+                errMsg = new String(errMsg.getBytes("ISO-8859-1"), "UTF-8");
             }
-        } catch (MissingResourceException e) {
+        } catch (MissingResourceException | UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
         }
+
         return errMsg;
     }
 
