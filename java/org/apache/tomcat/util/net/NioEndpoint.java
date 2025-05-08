@@ -273,6 +273,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
             initializeConnectionLatch();
 
             // Start poller threads
+            // 1. 先启动poller线程池
             pollers = new Poller[getPollerThreadCount()];
             for (int i=0; i<pollers.length; i++) {
                 pollers[i] = new Poller();
@@ -282,6 +283,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
                 pollerThread.start();
             }
 
+            // 2. 再启动acceptor线程
             startAcceptorThreads();
         }
     }
@@ -405,6 +407,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
             Socket sock = socket.socket();
             socketProperties.setProperties(sock);
 
+            // nioChannels 是对象池，缓存对象，避免重复的new/delete。用栈结构的原因：栈是后进先出，利用内存的时间局部性原理（上一次用到的对象大概率 还在CPU的Cache1/2/3中没被刷出）。
             NioChannel channel = nioChannels.pop();
             if (channel == null) {
                 SocketBufferHandler bufhandler = new SocketBufferHandler(
@@ -466,6 +469,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
                 while (paused && running) {
                     state = AcceptorState.PAUSED;
                     try {
+                        // 让出cpu，防止无味道的while死循环
                         Thread.sleep(50);
                     } catch (InterruptedException e) {
                         // Ignore
@@ -479,6 +483,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
 
                 try {
                     //if we have reached max connections, wait
+                    // 若acceptor组件收到的链接数 > connectionLimitLatch, 则等待
                     countUpOrAwaitConnection();
 
                     SocketChannel socket = null;

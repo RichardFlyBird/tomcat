@@ -30,6 +30,8 @@ import org.apache.tomcat.util.net.NioEndpoint;
  * @author Remy Maucherat
  * @author Costin Manolache
  */
+// 协议(Protocol)是依附 connector 实体存在的，因此只需要connector继承Lifecycle，实现生命期周期的管理即可。
+// 而 Protocol 不需要实现Lifecycle。只需要受制于connector管辖即可。
 public class Http11NioProtocol extends AbstractHttp11JsseProtocol<NioChannel> {
 
     private static final Log log = LogFactory.getLog(Http11NioProtocol.class);

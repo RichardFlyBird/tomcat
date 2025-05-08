@@ -644,8 +644,10 @@ public class Connector extends LifecycleMBeanBase  {
 
         if ("HTTP/1.1".equals(protocol) || protocol == null) {
             if (aprConnector) {
+                // Apr 是第三方的Nio (使用JNI单独开发的)，性能与JDK的差不多。所以研究JDK的NIO即可。
                 setProtocolHandlerClassName("org.apache.coyote.http11.Http11AprProtocol");
             } else {
+                // 研究这个即可，使用http1.1的应用层协议 + JDK 原生的Nio多路复用技术
                 setProtocolHandlerClassName("org.apache.coyote.http11.Http11NioProtocol");
             }
         } else if ("AJP/1.3".equals(protocol)) {
@@ -1072,6 +1074,7 @@ public class Connector extends LifecycleMBeanBase  {
         }
 
         try {
+            // 初始化协议，默认的是 Http11NioProtocol
             protocolHandler.init();
         } catch (Exception e) {
             throw new LifecycleException(

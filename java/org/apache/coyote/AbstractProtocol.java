@@ -583,7 +583,7 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
         String endpointName = getName();
         endpoint.setName(endpointName.substring(1, endpointName.length()-1));
         endpoint.setDomain(domain);
-
+        // 初始化 endpoint（endpoint就是对port的包装），内部绑定port
         endpoint.init();
     }
 
