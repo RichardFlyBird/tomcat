@@ -267,7 +267,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
 
             // Create worker collection
             if ( getExecutor() == null ) {
-                createExecutor();
+                createExecutor(); // 创建默认的业务线程池，至此tomcat线程模型为: Acceptor(单线程阻塞模式, 处理accept操作) + pollers(2个线程非阻塞模式，处理socket的read/write操作) + executor业务线程池(处理拿到socket后的业务逻辑)
             }
 
             initializeConnectionLatch();
@@ -604,6 +604,8 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
         @Override
         public void run() {
             if (interestOps == OP_REGISTER) {
+                // acceptor 发送给 poller的 PollerEvent事件:
+                // 1. interestOps = OP_REGISTER时，代表是acceptor accept()方法返回的socket (即三次握手成功后从Linux的accept队列中取出的socket)，此时根据状态机轮转一定是tomcat server该关注 socket的读事件了，因此注册OP_READ
                 try {
                     socket.getIOChannel().register(
                             socket.getPoller().getSelector(), SelectionKey.OP_READ, socketWrapper);
@@ -611,6 +613,9 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
                     log.error(sm.getString("endpoint.nio.registerFail"), x);
                 }
             } else {
+                // 2. 若不是accept socket的PollerEvent事件，那么
+                //      2.1 看socket是否被cancel了
+                //      2.2 看socket到底注册了什么具体事件等等
                 final SelectionKey key = socket.getIOChannel().keyFor(socket.getPoller().getSelector());
                 try {
                     if (key == null) {
@@ -721,7 +726,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
             for (int i = 0, size = events.size(); i < size && (pe = events.poll()) != null; i++ ) {
                 result = true;
                 try {
-                    pe.run();
+                    pe.run(); // 处理注册epoll事件，或者取消epoll的注册
                     pe.reset();
                     if (running && !paused) {
                         eventCache.push(pe);
@@ -853,7 +858,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
                 }
                 //either we timed out or we woke up, process events first
                 if ( keyCount == 0 ) hasEvents = (hasEvents | events());
-
+                // 获取 selector.select()的结果，并进行遍历
                 Iterator<SelectionKey> iterator =
                     keyCount > 0 ? selector.selectedKeys().iterator() : null;
                 // Walk through the collection of ready keys and dispatch
@@ -867,7 +872,7 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
                         iterator.remove();
                     } else {
                         iterator.remove();
-                        processKey(sk, attachment);
+                        processKey(sk, attachment); // 处理epoll中准备好的事件
                     }
                 }//while
 
@@ -885,11 +890,13 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
                 } else if ( sk.isValid() && attachment != null ) {
                     if (sk.isReadable() || sk.isWritable() ) {
                         if ( attachment.getSendfileData() != null ) {
+                            // 若有发送文件操作，则处理发送文件，把文件发送到socket中。可能的场景是文件下载。
                             processSendfile(sk,attachment, false);
                         } else {
                             unreg(sk, attachment, sk.readyOps());
                             boolean closeSocket = false;
                             // Read goes before write
+                            // 下面处理读、写事件
                             if (sk.isReadable()) {
                                 if (!processSocket(attachment, SocketEvent.OPEN_READ, true)) {
                                     closeSocket = true;
@@ -942,11 +949,16 @@ public class NioEndpoint extends AbstractJsseEndpoint<NioChannel> {
                 WritableByteChannel wc = ((sc instanceof SecureNioChannel)?sc:sc.getIOChannel());
 
                 // We still have data in the buffer
+                // 若buffer中有数据，则先把这部分数据写出去，防止数据顺序紊乱
                 if (sc.getOutboundRemaining()>0) {
                     if (sc.flushOutbound()) {
                         socketWrapper.updateLastWrite();
                     }
                 } else {
+                    // 若buffer中没有数据，则直接transferTo()写
+                    // 这里涉及到两个FD (从文件FD -> 写出到socketFD):
+                    //      1. 文件FD (source)
+                    //      2. socketFD (target)
                     long written = sd.fchannel.transferTo(sd.pos,sd.length,wc);
                     if (written > 0) {
                         sd.pos += written;

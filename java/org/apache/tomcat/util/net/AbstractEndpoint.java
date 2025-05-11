@@ -1077,7 +1077,7 @@ public abstract class AbstractEndpoint<S> {
             }
             Executor executor = getExecutor();
             if (dispatch && executor != null) {
-                executor.execute(sc);
+                executor.execute(sc); // 交给业务线程池处理业务逻辑
             } else {
                 sc.run();
             }
