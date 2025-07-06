@@ -759,6 +759,8 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                     String negotiatedProtocol = wrapper.getNegotiatedProtocol();
                     // OpenSSL typically returns null whereas JSSE typically
                     // returns "" when no protocol is negotiated
+                    // 这里是协议升级的场景，如http -> 升级到https(增加tls)，或者http -> 升级到websocket。
+                    // 这里暂不考虑协议升级
                     if (negotiatedProtocol != null && negotiatedProtocol.length() > 0) {
                         UpgradeProtocol upgradeProtocol = getProtocol().getNegotiatedProtocol(negotiatedProtocol);
                         if (upgradeProtocol != null) {
@@ -793,12 +795,14 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                         }
                     }
                 }
+                // 1. 从对象池拿
                 if (processor == null) {
                     processor = recycledProcessors.pop();
                     if (getLog().isDebugEnabled()) {
                         getLog().debug(sm.getString("abstractConnectionHandler.processorPop", processor));
                     }
                 }
+                // 2. 对象池没有，则create一个processor
                 if (processor == null) {
                     processor = getProtocol().createProcessor();
                     register(processor);
@@ -811,10 +815,12 @@ public abstract class AbstractProtocol<S> implements ProtocolHandler,
                         wrapper.getSslSupport(getProtocol().getClientCertProvider()));
 
                 // Associate the processor with the connection
+                // 缓存起来，方便下次使用（第一次数据不全，第二次还需要用，所以缓存起来）
                 connections.put(socket, processor);
 
                 SocketState state = SocketState.CLOSED;
                 do {
+                    // 核心操作
                     state = processor.process(wrapper, status);
 
                     if (state == SocketState.UPGRADING) {

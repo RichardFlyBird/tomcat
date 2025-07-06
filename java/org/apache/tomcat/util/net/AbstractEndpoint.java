@@ -69,6 +69,7 @@ public abstract class AbstractEndpoint<S> {
         public enum SocketState {
             // TODO Add a new state to the AsyncStateMachine and remove
             //      ASYNC_END (if possible)
+            // LONG: http的长链接，即开启keepalive了
             OPEN, CLOSED, LONG, ASYNC_END, SENDFILE, UPGRADING, UPGRADED, SUSPENDED
         }
 
@@ -1079,7 +1080,7 @@ public abstract class AbstractEndpoint<S> {
             if (dispatch && executor != null) {
                 executor.execute(sc); // 交给业务线程池处理业务逻辑
             } else {
-                sc.run();
+                sc.run(); // 否则在当前poller线程中run，但是这样会阻塞poller接收请求的操作，导致其他请求阻塞。所以默认都是有 业务Executor的
             }
         } catch (RejectedExecutionException ree) {
             getLog().warn(sm.getString("endpoint.executor.fail", socketWrapper) , ree);
