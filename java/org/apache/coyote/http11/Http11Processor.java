@@ -187,6 +187,12 @@ public class Http11Processor extends AbstractProcessor {
         httpParser = new HttpParser(protocol.getRelaxedPathChars(),
                 protocol.getRelaxedQueryChars());
 
+        /**
+         * inputBuffer 和 outPutBuffer 的目的:
+         *     1. inputBuffer: 由于http是基于tcp协议的，而tcp协议是基于流的，就会存在第一次接到一半的数据，需要第二次再接收，即数据粘包问题。
+         *                     所以需要应用层缓冲区 暂存不完整的客户端发来的数据，等着下次再次接受，组合成完整的数据，才能让server进行处理
+         *     2. outPutBuffer: 暂存socket要发送的数据，避免频繁调用系统调用，提升性能。
+          */
         inputBuffer = new Http11InputBuffer(request, protocol.getMaxHttpHeaderSize(),
                 protocol.getRejectIllegalHeader(), httpParser);
         request.setInputBuffer(inputBuffer);
